@@ -1212,7 +1212,7 @@
                 const data = await res.json();
                 allReciters = data.reciters.filter(r => r.moshaf && r.moshaf.length > 0).sort((a, b) => a.name.localeCompare(b.name, 'ar')); 
                 renderRecitersList(allReciters);
-                let defaultReciter = allReciters.find(r => r.name.includes('مشاري العفاسي')) || allReciters[0];
+                let defaultReciter = allReciters.find(r => r.name.includes('اختر القارئ')) || allReciters[0];
                 selectReciter(defaultReciter.name, defaultReciter.moshaf[0].server, false);
             } catch (error) { document.getElementById('selected-reciter-name').innerText = 'خطأ في تحميل القراء'; }
         }
