@@ -646,7 +646,7 @@
                     </div>
                     <div class="task-item" onclick="toggleTask(this)">
                         <div class="task-checkbox"><i class="fa-solid fa-check"></i></div>
-                        <div><h4>ورد القرآن الكريم</h4><p style="font-size: 13px; color: var(--text-gray); margin:0;">قراءة جزء واحد على অন্তত</p></div>
+                        <div><h4>ورد القرآن الكريم</h4><p style="font-size: 13px; color: var(--text-gray); margin:0;">قراءة جزء واحد على الأقل</p></div>
                     </div>
                     <div class="task-item" onclick="toggleTask(this)">
                         <div class="task-checkbox"><i class="fa-solid fa-check"></i></div>
@@ -975,7 +975,7 @@
             return parseInt(h) * 60 + parseInt(m);
         }
 
-        // --- 3. Pomodoro Timer & Certificate Logic ---
+        // --- 3. Pomodoro Timer & Certificate Logic (Real-time Updated) ---
         let pomoInterval;
         let pomoTimeLeft = 25 * 60;
         let totalSessionTime = 25 * 60;
@@ -1020,6 +1020,11 @@
                 clearInterval(pomoInterval);
                 btn.innerHTML = '<i class="fa-solid fa-play"></i> استئناف';
                 isPomoRunning = false;
+                
+                // حفظ الوقت عند الإيقاف المؤقت
+                if(isWorkSession) {
+                    localStorage.setItem('athar_focus_time', totalFocusSeconds);
+                }
             } else {
                 btn.innerHTML = '<i class="fa-solid fa-pause"></i> إيقاف مؤقت';
                 isPomoRunning = true;
@@ -1030,6 +1035,25 @@
 
                 pomoInterval = setInterval(() => {
                     pomoTimeLeft--;
+                    
+                    // حساب الوقت الفعلي ثانية بثانية
+                    if (isWorkSession) {
+                        totalFocusSeconds++;
+                        
+                        // حفظ وعرض الدقائق كل 60 ثانية
+                        if (totalFocusSeconds % 60 === 0) {
+                            localStorage.setItem('athar_focus_time', totalFocusSeconds);
+                            updateTotalFocusDisplay();
+                        }
+
+                        // التحقق اللحظي لـ 65 دقيقة
+                        const targetTimeInSeconds = 65 * 60; 
+                        if (totalFocusSeconds === targetTimeInSeconds && !hasEarnedCertificate) {
+                            document.getElementById('certificate-modal').classList.remove('hidden');
+                            showToast("🎉 بطل! لقد أتممت هدف المذاكرة اليوم!", "fa-award");
+                        }
+                    }
+
                     updatePomoDisplay();
                     updatePomoCircle();
                     
@@ -1045,15 +1069,8 @@
                         }
 
                         if(isWorkSession) {
-                            const workMins = parseInt(document.getElementById('work-mins').value);
-                            totalFocusSeconds += (workMins * 60);
                             localStorage.setItem('athar_focus_time', totalFocusSeconds);
                             updateTotalFocusDisplay();
-
-                            const fiveHoursInSeconds = 1 * 60 * 60;
-                            if (totalFocusSeconds >= fiveHoursInSeconds && !hasEarnedCertificate) {
-                                document.getElementById('certificate-modal').classList.remove('hidden');
-                            }
 
                             sendNotification("بومودورو", "انتهى وقت التركيز! خذ استراحة.");
                             showToast("انتهى وقت التركيز! خذ استراحة 🌿", "fa-clock");
@@ -1089,6 +1106,12 @@
             const prayerAfter = document.getElementById('prayer-after');
             if(prayerAfter) prayerAfter.style.display = 'none';
             
+            // حفظ الوقت المتراكم قبل تصفير العداد لتجنب ضياع المجهود
+            if (isWorkSession) {
+                localStorage.setItem('athar_focus_time', totalFocusSeconds);
+                updateTotalFocusDisplay();
+            }
+            
             updatePomoSettings();
         }
 
@@ -1120,7 +1143,7 @@
         <h2>منصة أَثَر للإنتاجية</h2>
         <p>بكل فخر واعتزاز، تشهد المنصة بأن البطل(ة)</p>
         <div class="name">${name}</div>
-        <p>قد أتم بنجاح ومثابرة أكثر من <b>ساعة واحدة/b> من التركيز والمذاكرة المتواصلة خلال اليوم.<br>سائلين المولى عز وجل له دوام التوفيق والنجاح.</p>
+        <p>قد أتم بنجاح ومثابرة <b>ساعة واحدة</b> من التركيز والمذاكرة المتواصلة خلال اليوم.<br>سائلين المولى عز وجل له دوام التوفيق والنجاح.</p>
         <div class="footer">
             <div>التاريخ: ${todayDate}</div>
             <div>توقيع: إدارة منصة أَثَر</div>
@@ -1200,7 +1223,6 @@
             const dropdown = document.getElementById('reciter-dropdown');
             if (dropdown && !dropdown.contains(event.target)) { document.getElementById('options-container').classList.remove('open'); }
             
-            // إغلاق القوائم المخصصة في قسم الحفظ عند النقر بالخارج
             if (!event.target.closest('.modern-select')) {
                 document.querySelectorAll('.modern-select').forEach(el => el.classList.remove('open'));
             }
@@ -1251,7 +1273,7 @@
                 const data = await response.json();
                 surahsData = data.data.surahs.references;
                 renderSurahsGrid(surahsData);
-                populateMemorizeSelect(); // تغذية قائمة الحفظ المخصصة
+                populateMemorizeSelect(); 
                 document.getElementById('quran-loader').style.display = 'none';
             } catch (error) { document.getElementById('quran-loader').innerHTML = 'حدث خطأ في التحميل.'; }
         }
@@ -1329,7 +1351,6 @@
         let memTargetRepeat = 1;
         const memAudio = document.getElementById('memorize-audio');
 
-        // دوال القوائم المنسدلة المخصصة
         function toggleModernSelect(id, event) {
             event.stopPropagation();
             document.querySelectorAll('.modern-select').forEach(el => {
@@ -1345,7 +1366,6 @@
             hiddenInput.value = value;
             selectContainer.classList.remove('open');
             
-            // تنفيذ الإجراء بناءً على القائمة اللي اتغيرت
             if (selectId === 'custom-surah-select' || selectId === 'custom-reciter-select') {
                 if(document.getElementById('memorize-surah-select').value) {
                     loadMemorizeSurah();
