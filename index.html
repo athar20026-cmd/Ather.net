@@ -425,6 +425,20 @@
                     <i class="fa-solid fa-moon"></i><h3>سجل القيام</h3>
                 </div>
             </div>
+
+            <div class="glass-panel" style="padding: 25px; margin-top: 40px;">
+                <h3 style="color: var(--primary); margin-bottom: 10px;"><i class="fa-brands fa-telegram" style="color: #0088cc;"></i> ربط إشعارات تلغرام</h3>
+                <p style="font-size: 14px; color: var(--text-gray); margin-bottom: 15px; line-height: 1.6;">
+                    استقبل تنبيهات الصلوات، المذاكرة، والقيام مباشرة على حسابك.
+                </p>
+                <div class="task-input-container">
+                    <input type="text" id="telegram-chat-id-input" placeholder="أدخل رقم Chat ID الخاص بك...">
+                    <button onclick="saveTelegramChatID()"><i class="fa-solid fa-save"></i> حفظ</button>
+                </div>
+                <p style="font-size: 12px; color: var(--text-gray); margin-top: 10px;">
+                    للحصول على رقمك، أرسل رسالة للبوت <a href="https://t.me/getmyid_bot" target="_blank" style="color: var(--primary); text-decoration: none; font-weight: bold;">@getmyid_bot</a>
+                </p>
+            </div>
         </section>
 
         <section id="page-quran" class="page">
@@ -766,6 +780,58 @@
     </div>
 
     <script>
+        // --- 00. إعدادات بوت التلغرام (Telegram Bot API) ---
+        // ضع التوكن الخاص بك هنا فقط، البوت سيكون واحداً، لكنه سيرسل لكل مستخدم على رقمه
+        const TELEGRAM_BOT_TOKEN = '8739086564:AAGLSdw3AgyY7M4XC47jplUE4VQQnxE3Rg8';
+
+        // دالة حفظ رقم المستخدم في متصفحه
+        function saveTelegramChatID() {
+            const input = document.getElementById('telegram-chat-id-input').value.trim();
+            if (input) {
+                localStorage.setItem('athar_telegram_chat_id', input);
+                showToast('تم حفظ إعدادات تلغرام بنجاح! 🌿', 'fa-check');
+            } else {
+                localStorage.removeItem('athar_telegram_chat_id');
+                showToast('تم إيقاف إشعارات تلغرام.', 'fa-info-circle');
+            }
+        }
+
+        // دالة استرجاع رقم المستخدم عند فتح الموقع
+        function loadTelegramChatID() {
+            const savedId = localStorage.getItem('athar_telegram_chat_id');
+            if (savedId) {
+                document.getElementById('telegram-chat-id-input').value = savedId;
+            }
+        }
+
+        // دالة إرسال الإشعار
+        async function sendTelegramNotification(message) {
+            // جلب رقم المستخدم من جهازه
+            const userChatId = localStorage.getItem('athar_telegram_chat_id');
+            
+            // إذا لم يقم المستخدم بإدخال رقمه، لا تفعل شيئاً ولا تظهر أخطاء
+            if (!userChatId) {
+                return; 
+            }
+
+            const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+            
+            try {
+                await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: userChatId, 
+                        text: message,
+                        parse_mode: 'Markdown'
+                    })
+                });
+                console.log('تم إرسال التنبيه إلى تلغرام بنجاح.');
+            } catch (error) {
+                console.error('خطأ في إرسال التنبيه إلى تلغرام:', error);
+            }
+        }
+
         // --- 0. نظام الإشعارات الداخلية (Toasts) ---
         function showToast(message, icon = 'fa-bell') {
             let container = document.getElementById('toast-container');
@@ -945,6 +1011,10 @@
                 if (diffMins <= 0.1 && diffMins > 0 && !notifiedPrayers[notificationKey]) {
                     showToast(`حان الآن موعد ${nextPrayer.name} 🕌`, 'fa-clock');
                     sendNotification("حان وقت الصلاة", `حان الآن موعد ${nextPrayer.name}`);
+                    
+                    // إرسال تنبيه الصلاة لتلغرام
+                    sendTelegramNotification(`🕌 حان الآن موعد *${nextPrayer.name}* حسب توقيتك المحلي. صلاتك حياتك!`);
+                    
                     notifiedPrayers[notificationKey] = true;
                     
                     const sound = document.getElementById('pomo-sound');
@@ -1051,6 +1121,9 @@
                         if (totalFocusSeconds === targetTimeInSeconds && !hasEarnedCertificate) {
                             document.getElementById('certificate-modal').classList.remove('hidden');
                             showToast("🎉 بطل! لقد أتممت هدف المذاكرة اليوم!", "fa-award");
+                            
+                            // إرسال تنبيه النجاح لتلغرام
+                            sendTelegramNotification("🎉 *ما شاء الله!* تم إتمام هدف التركيز اليوم واستخراج شهادة تميز جديدة بنجاح! 🌿");
                         }
                     }
 
@@ -1724,6 +1797,9 @@
                 localStorage.setItem('athar_qiyam', JSON.stringify(qiyamData));
                 updateQiyamUI();
                 showToast("تقبل الله طاعتك 🌙", "fa-moon");
+                
+                // إرسال إشعار للتلغرام عند تسجيل القيام
+                sendTelegramNotification(`🌙 *تنبيه من منصة أَثَر*:\nتم تسجيل قيام الليل بنجاح! الستريك الحالي: ${qiyamData.streak} ليلة. تقبل الله طاعتك.`);
             }
         }
 
@@ -1764,6 +1840,8 @@
 
         // --- Init ---
         window.onload = () => {
+            loadTelegramChatID(); // تحميل الـ Chat ID من المتصفح إن وُجد
+            
             updateTotalFocusDisplay();
             checkNewDay(); 
             fetchReciters(); 
