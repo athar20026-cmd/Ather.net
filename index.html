@@ -1054,6 +1054,8 @@
 
         let totalFocusSeconds = parseInt(localStorage.getItem('athar_focus_time')) || 0;
         let hasEarnedCertificate = localStorage.getItem('athar_cert_earned') === new Date().toDateString();
+        let expectedEndTime = 0; 
+        let focusTimeAtStart = 0;
 
         function updateTotalFocusDisplay() {
             let mins = Math.floor(totalFocusSeconds / 60);
@@ -1084,52 +1086,73 @@
             }
         }
 
-        function togglePomodoro() {
+       function togglePomodoro() {
             const btn = document.getElementById('pomo-toggle');
+            
+            // قراءة المدة المحددة من الإعدادات للرسائل
+            const workMins = document.getElementById('work-mins').value;
+            const breakMins = document.getElementById('break-mins').value;
+
             if(isPomoRunning) {
+                // عند الإيقاف المؤقت
                 clearInterval(pomoInterval);
                 btn.innerHTML = '<i class="fa-solid fa-play"></i> استئناف';
                 isPomoRunning = false;
                 
-                // حفظ الوقت عند الإيقاف المؤقت
                 if(isWorkSession) {
                     localStorage.setItem('athar_focus_time', totalFocusSeconds);
                 }
             } else {
+                // عند التشغيل أو الاستئناف
                 btn.innerHTML = '<i class="fa-solid fa-pause"></i> إيقاف مؤقت';
+                
+                // إرسال إشعار البدء (فقط إذا كانت جلسة جديدة وليست مجرد استئناف بعد إيقاف مؤقت)
+                if (pomoTimeLeft === totalSessionTime) {
+                    if (isWorkSession) {
+                        sendTelegramNotification(`⏳ *بدأت جلسة التركيز!*\nالمدة المحددة: ${workMins} دقيقة. بالتوفيق في إنجاز مهامك! 💪`);
+                    } else {
+                        sendTelegramNotification(`☕ *بدأت الاستراحة!*\nاستمتع بـ ${breakMins} دقائق من الراحة.`);
+                    }
+                }
+
                 isPomoRunning = true;
                 
+                // نحسب وقت النهاية بناءً على ساعة الجهاز الحقيقية (لحل مشكلة التجميد في الخلفية)
+                expectedEndTime = Date.now() + (pomoTimeLeft * 1000);
+                focusTimeAtStart = totalFocusSeconds; 
+
                 if(isWorkSession) {
                     document.getElementById('prayer-after').style.display = 'none';
                 }
 
                 pomoInterval = setInterval(() => {
-                    pomoTimeLeft--;
+                    let now = Date.now();
                     
-                    // حساب الوقت الفعلي ثانية بثانية
+                    // حساب الوقت المتبقي بالفرق بين وقت النهاية والوقت الحالي
+                    pomoTimeLeft = Math.round((expectedEndTime - now) / 1000);
+                    if (pomoTimeLeft < 0) pomoTimeLeft = 0; 
+                    
                     if (isWorkSession) {
-                        totalFocusSeconds++;
+                        // حساب التركيز الفعلي بدقة
+                        let sessionElapsed = totalSessionTime - pomoTimeLeft;
+                        totalFocusSeconds = focusTimeAtStart + sessionElapsed;
                         
-                        // حفظ وعرض الدقائق كل 60 ثانية
-                        if (totalFocusSeconds % 60 === 0) {
-                            localStorage.setItem('athar_focus_time', totalFocusSeconds);
-                            updateTotalFocusDisplay();
-                        }
+                        localStorage.setItem('athar_focus_time', totalFocusSeconds);
+                        updateTotalFocusDisplay();
 
-                        // التحقق اللحظي لـ 65 دقيقة
-                       const targetTimeInSeconds = 60 * 60; 
-                        if (totalFocusSeconds === targetTimeInSeconds && !hasEarnedCertificate) {
+                        const targetTimeInSeconds = 60 * 60; 
+                        if (totalFocusSeconds >= targetTimeInSeconds && !hasEarnedCertificate) {
                             document.getElementById('certificate-modal').classList.remove('hidden');
                             showToast("🎉 بطل! لقد أتممت هدف المذاكرة اليوم!", "fa-award");
-                            
-                            // إرسال تنبيه النجاح لتلغرام
-                            sendTelegramNotification("🎉 *ما شاء الله!* تم إتمام هدف التركيز اليوم واستخراج شهادة تميز جديدة بنجاح! 🌿");
+                            sendTelegramNotification("🎉 *ما شاء الله!* تم إتمام هدف التركيز اليوم (ساعة كاملة) واستخراج شهادة تميز جديدة بنجاح! 🌿");
+                            hasEarnedCertificate = true; 
                         }
                     }
 
                     updatePomoDisplay();
                     updatePomoCircle();
                     
+                    // عند انتهاء الوقت المحدد
                     if(pomoTimeLeft <= 0) {
                         clearInterval(pomoInterval);
                         isPomoRunning = false;
@@ -1147,6 +1170,10 @@
 
                             sendNotification("بومودورو", "انتهى وقت التركيز! خذ استراحة.");
                             showToast("انتهى وقت التركيز! خذ استراحة 🌿", "fa-clock");
+                            
+                            // 🚀 إشعار تلغرام بانتهاء وقت المذاكرة 🚀
+                            sendTelegramNotification(`✅ *عاش يا بطل!*\nانتهت جلسة التركيز (${workMins} دقيقة) بنجاح. خذ استراحتك الآن 🌿`);
+
                             pomoTimeLeft = document.getElementById('break-mins').value * 60;
                             totalSessionTime = pomoTimeLeft;
                             isWorkSession = false;
@@ -1157,6 +1184,10 @@
                         } else {
                             sendNotification("بومودورو", "انتهت الاستراحة! عد للتركيز.");
                             showToast("انتهت الاستراحة! عد للتركيز 💪", "fa-clock");
+                            
+                            // 🚀 إشعار تلغرام بانتهاء الاستراحة 🚀
+                            sendTelegramNotification(`⏰ *انتهت الاستراحة!*\nحان وقت العودة للتركيز والعمل 💪`);
+
                             pomoTimeLeft = document.getElementById('work-mins').value * 60;
                             totalSessionTime = pomoTimeLeft;
                             isWorkSession = true;
